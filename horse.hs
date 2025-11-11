@@ -19,7 +19,7 @@ main = do
                 fileName <- getLine
                 readFile fileName
             else do
-                putStrLn ("Received arguments: " ++ show args)
+                putStrLn ("Args recebidos: " ++ show args)
                 let fileName = head args
                 readFile fileName
 
@@ -35,7 +35,7 @@ processLine line = do
 
     case numbers of -- processa linha
         [m, n, x, y] -> do
-            putStrLn $ "Result for " ++ show numbers
+            putStrLn $ "Resultado para " ++ show numbers
             let firstSquare = (x, y)
     
             let t_empty = buildMatrix (m, n) -- cria matriz
