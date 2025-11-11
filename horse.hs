@@ -1,33 +1,59 @@
+import System.IO
+import System.Environment (getArgs)
+import Control.Monad
+import Data.List
 import Data.List (sortBy)
-import Data.Ord (comparing) 
+import Data.Ord (comparing)
 
-main :: IO()
+
+type Position = (Int, Int)
+type Path = [Position]
+
+main :: IO ()
 main = do
-    l <- getLine
-    let (m, n, x, y) = parseLine l
-    let firstSquare = (x, y)
+    args <- getArgs
+    contents <-
+        if null args
+            then do
+                putStrLn $ "Entre o nome do arquivo(texto): "
+                fileName <- getLine
+                readFile fileName
+            else do
+                putStrLn ("Received arguments: " ++ show args)
+                let fileName = head args
+                readFile fileName
+
+    let allLines = lines contents
+    mapM_ processLine allLines
+
+processLine :: String -> IO ()
+processLine line = do
+    -- separar nos espacos
+    let partes = words line
+    -- parsa como ints(sem validacao se der erro)
+    let numbers = map read partes :: [Int]
+
+    case numbers of -- processa linha
+        [m, n, x, y] -> do
+            putStrLn $ "Result for " ++ show numbers
+            let firstSquare = (x, y)
     
-    let t_empty = buildMatrix (m, n)
+            let t_empty = buildMatrix (m, n) -- cria matriz
     
-    let t_initial = setMatrixValue firstSquare (-1) t_empty
+            let t_initial = setMatrixValue firstSquare (-1) t_empty --casa inicial ja visitada
         
-    let sortedOptions = list_options firstSquare t_initial
-    let nextMoves = map fst sortedOptions
+            let sortedOptions = list_options firstSquare t_initial -- calcula candidatos pro primeiro mov
+            let nextMoves = map fst sortedOptions
 
-    let success = or (map (\move -> tourRecursive firstSquare move t_initial) nextMoves)
+            let result = tryOptions nextMoves t_initial [firstSquare] -- calcula melhor candidato
     
-    if success
-    then putStrLn "Solução encontrada!"
-    else putStrLn "Não foi possível encontrar uma solução."
-
-
-
-
-parseLine :: String -> (Int, Int, Int, Int)
-parseLine "" = (0, 0, 0, 0)
-parseLine l = 
-    let numbers = map read (words l)
-    in (numbers !! 0, numbers !! 1, numbers !! 2, numbers !! 3)
+            case result of
+                Just path -> do -- resolvido
+                    putStrLn "Soluçao encontrada!"
+                    putStrLn "Caminho:"
+                    print path
+                Nothing -> -- nao resolvido
+                    putStrLn "Nao foi possível encontrar uma soluçao."
 
 
 buildMatrix :: (Int, Int) -> [[Int]]
@@ -35,7 +61,7 @@ buildMatrix (m, n) =
     replicate m (replicate n 0)
 
 
-setMatrixValue :: (Int, Int) -> Int -> [[Int]] -> [[Int]]
+setMatrixValue :: (Int, Int) -> Int -> [[Int]] -> [[Int]] -- matriz nxn
 setMatrixValue (r, c) newValue matrix =
     let (beforeRows, currentRow:afterRows) = splitAt r matrix
         (beforeCols, _:afterCols) = splitAt c currentRow
@@ -52,10 +78,8 @@ isValid matrix (r, c) =
         c >= 0 && c < n &&
         (matrix !! r) !! c == 0
 
-
 isFull :: [[Int]] -> Bool
 isFull t = all (/= 0) (concat t)
-
 
 isReachable :: (Int, Int) -> (Int, Int) -> Bool
 isReachable (x1, y1) (x2, y2) =
@@ -72,22 +96,43 @@ verify_neighbors (x, y) matrix =
     in filter (isValid matrix) potentialMoves
 
 
-list_options :: (Int, Int) -> [[Int]] -> [((Int, Int), Int)]
+list_options :: (Int, Int) -> [[Int]] -> [((Int, Int), (Int, Int))]
 list_options (x, y) t =
     let neighbors = verify_neighbors (x, y) t
-        countNeighbors pos = length (verify_neighbors pos t)
-    in sortBy (comparing snd) $
-       map (\pos -> (pos, countNeighbors pos)) neighbors
+        countNeighbors pos = length (verify_neighbors pos t) -- calcula o numero de movimentos possiveis apartir de uma casa
+        lookahead pos = -- calcula o numero minimo de movimentos possiveis apartir de uma casa X alcançavel pela casa pos
+            let next = verify_neighbors pos t
+            in if null next
+               then maxBound
+               else minimum (map countNeighbors next)
+        pairs = map (\pos -> (pos, (countNeighbors pos, lookahead pos))) neighbors -- mapeamos neighbors para uma lista de tuplas
+    in sortBy (comparing snd) pairs --                                             contendo o valor original(pos),
+--                                                                                 a quantidade de casas atingiveis apartir de pos,
+--                                                                                 e o minimo de casas atingivel apartir de uma casa
+--                                                                                 atingivel por pos
 
-
-tourRecursive :: (Int, Int) -> (Int, Int) -> [[Int]] -> Bool
-tourRecursive startPos (x, y) t =
+tourRecursive :: Position     
+              -> Position      
+              -> [[Int]]       -- board
+              -> Path          -- caminho
+              -> Maybe Path    
+tourRecursive startPos (x, y) t path =
     let t_new = setMatrixValue (x, y) 1 t
-    
-    in if isFull t_new
-       then 
-           not (isReachable (x, y) startPos)
-       else 
-           let sortedOptions = list_options (x, y) t_new
-               nextMoves = map fst sortedOptions
-           in or (map (\move -> tourRecursive startPos move t_new) nextMoves)
+        newPath = path ++ [(x,y)]
+    in
+    if isFull t_new
+    then
+        Just newPath
+    else
+        let sortedOptions = list_options (x, y) t_new
+            nextPositions = map fst sortedOptions
+        in tryOptions nextPositions t_new newPath
+
+tryOptions :: [Position] -> [[Int]] -> Path -> Maybe Path
+tryOptions [] _ _ = Nothing
+tryOptions (p:ps) t path =
+    case tourRecursive (head path) p t path of
+        Just solution -> Just solution
+        Nothing       -> tryOptions ps t path
+
+
