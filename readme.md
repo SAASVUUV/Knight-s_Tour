@@ -1,4 +1,4 @@
-1. Compilar com "ghc Main.hs -o ktp"
+1. Compilar com "ghc horse.hs -o ktp"
 2. executa ktp
 3. programa aguarda como input o nome de um arquivo texto formatado como especificado na descrição do trabalho
     ex: input.txt 
